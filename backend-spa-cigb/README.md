@@ -1,23 +1,264 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# FastAPI Backend - SPA CIGB
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+## Descripción
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
+Backend desarrollado con FastAPI para un sistema de gestión de historias clínicas con las siguientes funcionalidades:
+
+- **Autenticación JWT**: Login seguro con tokens
+- **Gestión de usuarios**: Pacientes, doctores y administradores
+- **Historias clínicas**: Creación, edición y consulta de registros médicos
+- **Subida de archivos**: Imágenes y documentos asociados a historias clínicas
+- **Control de permisos**: Diferentes niveles de acceso según el rol
+
+## Estructura del proyecto
+
+```
+backend-spa-cigb/
+├── app/
+│   ├── __init__.py
+│   ├── main.py              # Aplicación principal FastAPI
+│   ├── api/                 # Rutas de la API
+│   │   ├── __init__.py
+│   │   ├── auth.py          # Autenticación y autorización
+│   │   ├── users.py         # Gestión de usuarios
+│   │   ├── medical_records.py # Historias clínicas
+│   │   └── file_upload.py   # Subida de archivos
+│   ├── core/                # Configuración central
+│   │   ├── __init__.py
+│   │   ├── config.py        # Configuraciones
+│   │   ├── database.py      # Conexión a base de datos
+│   │   └── security.py      # Funciones de seguridad
+│   ├── models/              # Modelos de base de datos
+│   │   ├── __init__.py
+│   │   └── models.py        # Modelos SQLAlchemy
+│   ├── schemas/             # Esquemas Pydantic
+│   │   ├── __init__.py
+│   │   ├── user.py          # Esquemas de usuario
+│   │   ├── medical_record.py # Esquemas de historias clínicas
+│   │   └── file.py          # Esquemas de archivos
+│   └── services/            # Lógica de negocio
+│       ├── __init__.py
+│       ├── user_service.py
+│       ├── medical_record_service.py
+│       └── file_service.py
+├── alembic/                 # Migraciones de base de datos
+│   ├── env.py
+│   ├── script.py.mako
+│   └── versions/
+├── uploads/                 # Directorio para archivos subidos
+├── requirements.txt         # Dependencias
+├── alembic.ini             # Configuración de Alembic
+├── .env.example            # Variables de entorno de ejemplo
+├── .gitignore
+├── run.py                  # Script de inicio
+└── README.md
+```
+
+## Instalación
+
+### 1. Crear entorno virtual
+
+```bash
+python -m venv venv
+source venv/bin/activate  # En Linux/Mac
+# o
+venv\Scripts\activate     # En Windows
+```
+
+### 2. Instalar dependencias
+
+```bash
+pip install -r requirements.txt
+```
+
+### 3. Configurar variables de entorno
+
+```bash
+cp .env.example .env
+```
+
+Editar el archivo `.env` con tus configuraciones:
+
+```env
+DATABASE_URL=postgresql://username:password@localhost:5432/spa_cigb_db
+SECRET_KEY=tu-clave-secreta-muy-segura
+ALLOWED_ORIGINS=http://localhost:3000,http://localhost:5173
+```
+
+### 4. Configurar base de datos PostgreSQL
+
+Crear la base de datos:
+
+```sql
+CREATE DATABASE spa_cigb_db;
+CREATE DATABASE spa_cigb_test_db;
+```
+
+### 5. Ejecutar migraciones
+
+```bash
+alembic upgrade head
+```
+
+## Uso
+
+### Iniciar el servidor
+
+```bash
+# Opción 1: Usando el script run.py
+python run.py
+
+# Opción 2: Usando uvicorn directamente
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+```
+
+La API estará disponible en: `http://localhost:8000`
+
+### Documentación de la API
+
+- Swagger UI: `http://localhost:8000/docs`
+- ReDoc: `http://localhost:8000/redoc`
+
+### Endpoints principales
+
+#### Autenticación
+- `POST /api/auth/login` - Iniciar sesión
+- `POST /api/auth/register` - Registrar usuario
+- `GET /api/auth/me` - Información del usuario actual
+- `POST /api/auth/logout` - Cerrar sesión
+
+#### Usuarios
+- `GET /api/users/` - Listar usuarios
+- `GET /api/users/patients` - Listar pacientes
+- `GET /api/users/doctors` - Listar doctores
+- `GET /api/users/{user_id}` - Obtener usuario
+- `PUT /api/users/{user_id}` - Actualizar usuario
+
+#### Historias clínicas
+- `GET /api/medical-records/` - Listar registros médicos
+- `POST /api/medical-records/` - Crear registro médico
+- `GET /api/medical-records/{record_id}` - Obtener registro específico
+- `PUT /api/medical-records/{record_id}` - Actualizar registro
+- `DELETE /api/medical-records/{record_id}` - Eliminar registro
+
+#### Archivos
+- `POST /api/files/upload` - Subir archivo
+- `GET /api/files/` - Listar archivos
+- `GET /api/files/{file_id}` - Información del archivo
+- `GET /api/files/{file_id}/download` - Descargar archivo
+- `DELETE /api/files/{file_id}` - Eliminar archivo
+
+## Roles y permisos
+
+### Paciente
+- Ver sus propias historias clínicas
+- Subir archivos personales
+- Actualizar su perfil
+
+### Doctor
+- Crear y editar historias clínicas de pacientes
+- Ver lista de pacientes
+- Subir archivos asociados a historias clínicas
+- Actualizar su perfil
+
+### Administrador
+- Acceso completo a todos los recursos
+- Gestionar usuarios
+- Ver todas las historias clínicas
+
+## Base de datos
+
+### Modelos principales
+
+- **User**: Usuarios del sistema (pacientes, doctores, admins)
+- **MedicalRecord**: Historias clínicas
+- **UploadedFile**: Archivos subidos al sistema
+
+### Migraciones
+
+Crear nueva migración:
+```bash
+alembic revision --autogenerate -m "Descripción del cambio"
+```
+
+Aplicar migraciones:
+```bash
+alembic upgrade head
+```
+
+## Desarrollo
+
+### Crear usuario administrador inicial
+
+```python
+# Ejecutar en una consola de Python
+from app.core.database import SessionLocal
+from app.services.user_service import UserService
+from app.schemas.user import UserCreate
+
+db = SessionLocal()
+user_service = UserService(db)
+
+admin_user = UserCreate(
+    username="admin",
+    email="admin@example.com",
+    password="admin123",
+    first_name="Admin",
+    last_name="User",
+    role="admin"
+)
+
+user_service.create_user(admin_user)
+db.close()
+```
+
+### Testing
+
+```bash
+# Instalar dependencias de testing
+pip install pytest pytest-asyncio httpx
+
+# Ejecutar tests
+pytest
+```
+
+## Deployment
+
+### Usando Docker
+
+```dockerfile
+FROM python:3.10
+
+WORKDIR /app
+
+COPY requirements.txt .
+RUN pip install -r requirements.txt
+
+COPY . .
+
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+```
+
+### Variables de entorno de producción
+
+```env
+ENVIRONMENT=production
+SECRET_KEY=clave-secreta-muy-segura-para-produccion
+DATABASE_URL=postgresql://user:pass@db:5432/spa_cigb_db
+ALLOWED_ORIGINS=https://tudominio.com
+```
+
+## Contribuir
+
+1. Fork del repositorio
+2. Crear rama para nueva feature (`git checkout -b feature/nueva-funcionalidad`)
+3. Commit de los cambios (`git commit -am 'Agregar nueva funcionalidad'`)
+4. Push a la rama (`git push origin feature/nueva-funcionalidad`)
+5. Crear Pull Request
+
+## Licencia
+
+Este proyecto está bajo la licencia MIT.
   <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
   [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
 
