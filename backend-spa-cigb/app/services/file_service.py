@@ -1,9 +1,9 @@
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from typing import Optional, List
 import os
 import uuid
 from fastapi import UploadFile
-from app.models.models import UploadedFile
+from app.models.models import UploadedFile, User, photo_medical_record_association
 from app.schemas.file import UploadedFileCreate
 from app.core.config import settings
 
@@ -23,6 +23,39 @@ class FileService:
             .all()
         )
     
+    def get_files_by_patient(self, patient_id: int) -> List[UploadedFile]:
+        """Obtener todos los archivos de un paciente"""
+        return (
+            self.db.query(UploadedFile)
+            .options(
+                joinedload(UploadedFile.user),
+                joinedload(UploadedFile.patient)
+            )
+            .filter(UploadedFile.patient_id == patient_id)
+            .order_by(UploadedFile.created_at.desc())
+            .all()
+        )
+    
+    def get_photos_by_patient(self, patient_id: int) -> List[UploadedFile]:
+        """Obtener solo las fotos de un paciente"""
+        return (
+            self.db.query(UploadedFile)
+            .filter(UploadedFile.patient_id == patient_id)
+            .filter(UploadedFile.file_type == "photo")
+            .order_by(UploadedFile.created_at.desc())
+            .all()
+        )
+    
+    def get_medical_records_by_patient(self, patient_id: int) -> List[UploadedFile]:
+        """Obtener solo las historias clínicas de un paciente"""
+        return (
+            self.db.query(UploadedFile)
+            .filter(UploadedFile.patient_id == patient_id)
+            .filter(UploadedFile.file_type == "medical_record")
+            .order_by(UploadedFile.created_at.desc())
+            .all()
+        )
+    
     def get_files_by_medical_record(self, medical_record_id: int) -> List[UploadedFile]:
         return (
             self.db.query(UploadedFile)
@@ -30,42 +63,123 @@ class FileService:
             .all()
         )
     
+    def classify_file_type(self, filename: str, mime_type: str) -> str:
+        """Clasificar el tipo de archivo basado en su extensión y mime type"""
+        image_extensions = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.tiff', '.webp']
+        image_mime_types = ['image/jpeg', 'image/png', 'image/gif', 'image/bmp', 'image/tiff', 'image/webp']
+        
+        file_extension = os.path.splitext(filename)[1].lower()
+        
+        if file_extension in image_extensions or mime_type in image_mime_types:
+            return "photo"
+        else:
+            return "medical_record"
+    
+    
+    async def save_uploaded_files(
+        self,
+        files: List[UploadFile],
+        user_id: int,
+        patient_id: int,
+        medical_record_id: Optional[int] = None,
+        descriptions: Optional[List[str]] = None
+    ) -> List[UploadedFile]:
+        """Guardar múltiples archivos subidos al sistema"""
+        
+        uploaded_files = []
+        
+        for i, file in enumerate(files):
+            # Obtener descripción si existe
+            description = descriptions[i] if descriptions and i < len(descriptions) else None
+            
+            # Generar nombre único para el archivo
+            file_extension = os.path.splitext(file.filename)[1]
+            unique_filename = f"{uuid.uuid4()}{file_extension}"
+            file_path = os.path.join(settings.UPLOAD_DIR, unique_filename)
+            
+            # Leer contenido del archivo
+            content = await file.read()
+            
+            # Guardar archivo físicamente
+            with open(file_path, "wb") as buffer:
+                buffer.write(content)
+            
+            # Clasificar tipo de archivo
+            file_type = self.classify_file_type(file.filename, file.content_type)
+            
+            # Crear registro en base de datos
+            db_file = UploadedFile(
+                filename=unique_filename,
+                original_filename=file.filename,
+                file_path=file_path,
+                file_size=len(content),
+                mime_type=file.content_type,
+                description=description,
+                file_type=file_type,
+                user_id=user_id,
+                patient_id=patient_id,
+                medical_record_id=medical_record_id if file_type == "medical_record" else None
+            )
+            
+            self.db.add(db_file)
+            uploaded_files.append(db_file)
+        
+        self.db.commit()
+        
+        # Refrescar objetos para obtener IDs generados
+        for db_file in uploaded_files:
+            self.db.refresh(db_file)
+        
+        return uploaded_files
+
     async def save_uploaded_file(
         self, 
         file: UploadFile, 
         user_id: int, 
+        patient_id: int,
         medical_record_id: Optional[int] = None,
         description: Optional[str] = None
     ) -> UploadedFile:
-        """Guardar archivo subido al sistema"""
+        """Guardar archivo único (mantener compatibilidad)"""
         
-        # Generar nombre único para el archivo
-        file_extension = os.path.splitext(file.filename)[1]
-        unique_filename = f"{uuid.uuid4()}{file_extension}"
-        file_path = os.path.join(settings.UPLOAD_DIR, unique_filename)
-        
-        # Guardar archivo físicamente
-        with open(file_path, "wb") as buffer:
-            content = await file.read()
-            buffer.write(content)
-        
-        # Crear registro en base de datos
-        db_file = UploadedFile(
-            filename=unique_filename,
-            original_filename=file.filename,
-            file_path=file_path,
-            file_size=len(content),
-            mime_type=file.content_type,
-            description=description,
+        files = await self.save_uploaded_files(
+            files=[file],
             user_id=user_id,
-            medical_record_id=medical_record_id
+            patient_id=patient_id,
+            medical_record_id=medical_record_id,
+            descriptions=[description] if description else None
         )
         
-        self.db.add(db_file)
-        self.db.commit()
-        self.db.refresh(db_file)
+        return files[0]
+    
+    def associate_photos_with_medical_record(self, photo_ids: List[int], medical_record_id: int) -> bool:
+        """Asociar fotos existentes con un registro médico"""
+        try:
+            # Verificar que las fotos existan y sean del tipo correcto
+            photos = (
+                self.db.query(UploadedFile)
+                .filter(UploadedFile.id.in_(photo_ids))
+                .filter(UploadedFile.file_type == "photo")
+                .all()
+            )
+            
+            if len(photos) != len(photo_ids):
+                return False
+            
+            # Insertar asociaciones
+            for photo_id in photo_ids:
+                association = photo_medical_record_association.insert().values(
+                    photo_id=photo_id,
+                    medical_record_id=medical_record_id
+                )
+                self.db.execute(association)
+            
+            self.db.commit()
+            return True
         
-        return db_file
+        except Exception:
+            self.db.rollback()
+            return False
     
     def delete_file(self, file_id: int) -> bool:
         """Eliminar archivo del sistema"""

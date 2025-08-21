@@ -1,11 +1,13 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import FileUpload from './FileUpload';
 import FileList from './FileList';
+import PatientFileManager from './PatientFileManager';
 import './Dashboard.css';
 
 const Dashboard: React.FC = () => {
   const { user, logout } = useAuth();
+  const [activeView, setActiveView] = useState<'patients' | 'upload' | 'files'>('patients');
 
   const handleLogout = () => {
     logout();
@@ -25,20 +27,58 @@ const Dashboard: React.FC = () => {
         </div>
       </header>
 
-      <main className="dashboard-main">
-        <div className="dashboard-container">
-          <div className="dashboard-section">
-            <h2>Subir Archivos</h2>
-            <p>Suba historias clínicas y fotos al sistema</p>
-            <FileUpload />
-          </div>
+      <nav className="dashboard-nav">
+        <button 
+          className={`nav-button ${activeView === 'patients' ? 'active' : ''}`}
+          onClick={() => setActiveView('patients')}
+        >
+          📁 Archivos por Paciente
+        </button>
+        <button 
+          className={`nav-button ${activeView === 'upload' ? 'active' : ''}`}
+          onClick={() => setActiveView('upload')}
+        >
+          ⬆️ Subir Archivos
+        </button>
+        <button 
+          className={`nav-button ${activeView === 'files' ? 'active' : ''}`}
+          onClick={() => setActiveView('files')}
+        >
+          📄 Mis Archivos
+        </button>
+      </nav>
 
-          <div className="dashboard-section">
-            <h2>Mis Archivos</h2>
-            <p>Lista de archivos subidos</p>
-            <FileList />
+      <main className="dashboard-main">
+        {activeView === 'patients' && (
+          <div className="dashboard-view">
+            <PatientFileManager />
           </div>
-        </div>
+        )}
+
+        {activeView === 'upload' && (
+          <div className="dashboard-view">
+            <div className="dashboard-section">
+              <h2>Subir Archivos</h2>
+              <p>Suba historias clínicas y fotos al sistema. Ahora puede subir múltiples archivos y asociarlos a pacientes específicos.</p>
+              <FileUpload 
+                onUploadComplete={() => {
+                  // Opcional: cambiar a la vista de pacientes después de subir
+                  // setActiveView('patients');
+                }}
+              />
+            </div>
+          </div>
+        )}
+
+        {activeView === 'files' && (
+          <div className="dashboard-view">
+            <div className="dashboard-section">
+              <h2>Mis Archivos</h2>
+              <p>Lista de archivos subidos por usted</p>
+              <FileList />
+            </div>
+          </div>
+        )}
       </main>
     </div>
   );

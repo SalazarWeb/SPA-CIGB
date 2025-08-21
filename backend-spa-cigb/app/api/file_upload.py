@@ -8,6 +8,7 @@ from app.core.config import settings
 from app.api.auth import get_current_user
 from app.services.file_service import FileService
 from app.services.medical_record_service import MedicalRecordService
+from app.services.user_service import UserService
 from app.schemas.user import User
 from app.schemas.file import UploadedFile, FileUploadResponse
 
@@ -16,31 +17,79 @@ router = APIRouter()
 @router.post("/upload", response_model=FileUploadResponse)
 async def upload_file(
     file: UploadFile = File(...),
+    patient_id: int = Form(...),
     medical_record_id: Optional[int] = Form(None),
     description: Optional[str] = Form(None),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Subir archivo al sistema"""
+    """Subir archivo único al sistema"""
+    return await upload_multiple_files(
+        files=[file],
+        patient_id=patient_id,
+        medical_record_id=medical_record_id,
+        descriptions=[description] if description else None,
+        current_user=current_user,
+        db=db
+    )
+
+@router.post("/upload-multiple", response_model=FileUploadResponse)
+async def upload_multiple_files(
+    files: List[UploadFile] = File(...),
+    patient_id: int = Form(...),
+    medical_record_id: Optional[int] = Form(None),
+    descriptions: Optional[List[str]] = Form(None),
+    photo_ids: Optional[List[int]] = Form(None),  # Para asociar fotos existentes
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Subir múltiples archivos al sistema"""
     file_service = FileService(db)
+    user_service = UserService(db)
     
-    # Verificar tipo de archivo
-    if not file_service.is_allowed_file_type(file.filename):
+    # Verificar que el paciente existe
+    patient = user_service.get_user(patient_id)
+    if not patient:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Tipo de archivo no permitido. Tipos permitidos: {', '.join(settings.allowed_extensions_list)}"
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Paciente no encontrado"
         )
     
-    # Verificar tamaño del archivo
-    file_content = await file.read()
-    if len(file_content) > settings.MAX_FILE_SIZE:
+    # Verificar permisos: solo admin, doctor asignado o el mismo paciente pueden subir archivos
+    if current_user.role == "admin":
+        # Admin puede subir archivos para cualquier paciente
+        pass
+    elif current_user.id == patient_id:
+        # El paciente puede subir sus propios archivos
+        pass
+    elif current_user.role == "doctor":
+        # Verificar que el doctor tenga acceso al paciente
+        if not user_service.doctor_has_access_to_patient(current_user.id, patient_id):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="No tiene permisos para subir archivos para este paciente"
+            )
+    else:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"El archivo es demasiado grande. Tamaño máximo: {settings.MAX_FILE_SIZE / 1024 / 1024:.1f}MB"
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="No tiene permisos para subir archivos"
         )
     
-    # Restablecer el puntero del archivo
-    file.file.seek(0)
+    # Verificar tipos y tamaños de archivos
+    for file in files:
+        if not file_service.is_allowed_file_type(file.filename):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Tipo de archivo no permitido: {file.filename}. Tipos permitidos: {', '.join(settings.allowed_extensions_list)}"
+            )
+        
+        file_content = await file.read()
+        if len(file_content) > settings.MAX_FILE_SIZE:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"El archivo {file.filename} es demasiado grande. Tamaño máximo: {settings.MAX_FILE_SIZE / 1024 / 1024:.1f}MB"
+            )
+        file.file.seek(0)  # Restablecer puntero
     
     # Verificar permisos del registro médico si se especifica
     if medical_record_id:
@@ -52,36 +101,77 @@ async def upload_file(
             )
     
     try:
-        uploaded_file = await file_service.save_uploaded_file(
-            file=file,
+        uploaded_files = await file_service.save_uploaded_files(
+            files=files,
             user_id=current_user.id,
+            patient_id=patient_id,
             medical_record_id=medical_record_id,
-            description=description
+            descriptions=descriptions
         )
         
+        # Si se proporcionaron photo_ids y hay un medical_record_id, asociar fotos existentes
+        if photo_ids and medical_record_id:
+            if not file_service.associate_photos_with_medical_record(photo_ids, medical_record_id):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Error al asociar fotos con el registro médico"
+                )
+        
         return FileUploadResponse(
-            message="Archivo subido exitosamente",
-            file=uploaded_file
+            message=f"Se subieron {len(uploaded_files)} archivo(s) exitosamente",
+            files=uploaded_files
         )
     
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error al subir el archivo: {str(e)}"
+            detail=f"Error al subir los archivos: {str(e)}"
         )
 
 @router.get("/", response_model=List[UploadedFile])
 async def get_files(
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=1000),
+    patient_id: Optional[int] = Query(None),
     medical_record_id: Optional[int] = Query(None),
+    file_type: Optional[str] = Query(None),  # 'photo' o 'medical_record'
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Obtener lista de archivos del usuario"""
+    """Obtener lista de archivos"""
     file_service = FileService(db)
+    user_service = UserService(db)
     
-    if medical_record_id:
+    if patient_id:
+        # Verificar permisos para acceder a archivos del paciente
+        if current_user.role == "admin":
+            # Admin puede ver archivos de cualquier paciente
+            pass
+        elif current_user.id == patient_id:
+            # El paciente puede ver sus propios archivos
+            pass
+        elif current_user.role == "doctor":
+            # Verificar que el doctor tenga acceso al paciente
+            if not user_service.doctor_has_access_to_patient(current_user.id, patient_id):
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="No tiene permisos para ver los archivos de este paciente"
+                )
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="No tiene permisos para ver archivos de pacientes"
+            )
+        
+        # Filtrar por tipo de archivo si se especifica
+        if file_type == "photo":
+            return file_service.get_photos_by_patient(patient_id)
+        elif file_type == "medical_record":
+            return file_service.get_medical_records_by_patient(patient_id)
+        else:
+            return file_service.get_files_by_patient(patient_id)
+    
+    elif medical_record_id:
         # Verificar permisos para el registro médico
         medical_service = MedicalRecordService(db)
         if not medical_service.can_access_record(medical_record_id, current_user.id, current_user.role):
@@ -91,9 +181,27 @@ async def get_files(
             )
         
         return file_service.get_files_by_medical_record(medical_record_id)
+    
     else:
         # Obtener archivos del usuario actual
         return file_service.get_files_by_user(current_user.id, skip, limit)
+
+@router.get("/patients", response_model=List[User])
+async def get_patients_with_files(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Obtener lista de pacientes que tienen archivos"""
+    user_service = UserService(db)
+    
+    if current_user.role == "admin":
+        return user_service.get_patients_with_files()
+    elif current_user.role == "doctor":
+        return user_service.get_doctor_patients_with_files(current_user.id)
+    else:
+        # Pacientes solo pueden ver sus propios archivos
+        patient = user_service.get_user(current_user.id)
+        return [patient] if patient else []
 
 @router.get("/{file_id}", response_model=UploadedFile)
 async def get_file_info(

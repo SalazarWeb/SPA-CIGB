@@ -1,6 +1,7 @@
 from sqlalchemy.orm import Session
 from typing import Optional, List
-from app.models.models import User
+from sqlalchemy import exists
+from app.models.models import User, UploadedFile, doctor_patient_association
 from app.schemas.user import UserCreate, UserUpdate
 from app.core.security import get_password_hash, verify_password
 
@@ -25,6 +26,37 @@ class UserService:
     
     def get_doctors(self, skip: int = 0, limit: int = 100) -> List[User]:
         return self.db.query(User).filter(User.role == "doctor").offset(skip).limit(limit).all()
+    
+    def get_patients_with_files(self) -> List[User]:
+        """Obtener pacientes que tienen archivos subidos"""
+        return (
+            self.db.query(User)
+            .filter(User.role == "patient")
+            .filter(exists().where(UploadedFile.patient_id == User.id))
+            .order_by(User.first_name, User.last_name)
+            .all()
+        )
+    
+    def get_doctor_patients_with_files(self, doctor_id: int) -> List[User]:
+        """Obtener pacientes de un doctor específico que tienen archivos"""
+        return (
+            self.db.query(User)
+            .filter(User.role == "patient")
+            .filter(exists().where(UploadedFile.patient_id == User.id))
+            .filter(exists().where(
+                (doctor_patient_association.c.doctor_id == doctor_id) &
+                (doctor_patient_association.c.patient_id == User.id)
+            ))
+            .order_by(User.first_name, User.last_name)
+            .all()
+        )
+    
+    def doctor_has_access_to_patient(self, doctor_id: int, patient_id: int) -> bool:
+        """Verificar si un doctor tiene acceso a un paciente específico"""
+        return self.db.query(doctor_patient_association).filter(
+            doctor_patient_association.c.doctor_id == doctor_id,
+            doctor_patient_association.c.patient_id == patient_id
+        ).first() is not None
     
     def create_user(self, user: UserCreate) -> User:
         hashed_password = get_password_hash(user.password)
