@@ -4,7 +4,7 @@ import os
 
 class Settings(BaseSettings):
     # Database
-    DATABASE_URL: str = "postgresql://username:password@localhost:5432/spa_cigb_db"
+    DATABASE_URL: str = "sqlite:///./spa_cigb.db"
     
     # JWT
     SECRET_KEY: str = "your-secret-key-here-change-in-production"
@@ -14,13 +14,22 @@ class Settings(BaseSettings):
     # Upload settings
     UPLOAD_DIR: str = "uploads"
     MAX_FILE_SIZE: int = 10485760  # 10MB
-    ALLOWED_EXTENSIONS: List[str] = ["jpg", "jpeg", "png", "gif", "pdf"]
+    ALLOWED_EXTENSIONS: str = "jpg,jpeg,png,gif,pdf"
     
     # CORS
-    ALLOWED_ORIGINS: List[str] = ["http://localhost:3000", "http://localhost:5173"]
+    ALLOWED_ORIGINS: str = "http://localhost:3000,http://localhost:5173"
     
     # Environment
     ENVIRONMENT: str = "development"
+    
+    @property
+    def allowed_extensions_list(self) -> List[str]:
+        return [ext.strip() for ext in self.ALLOWED_EXTENSIONS.split(",")]
+    
+    @property
+    def allowed_origins_list(self) -> List[str]:
+        return [origin.strip() for origin in self.ALLOWED_ORIGINS.split(",")]
+    
     
     class Config:
         env_file = ".env"

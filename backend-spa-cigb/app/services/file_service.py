@@ -91,7 +91,7 @@ class FileService:
             return False
         
         file_extension = os.path.splitext(filename)[1].lower().lstrip('.')
-        return file_extension in [ext.lower() for ext in settings.ALLOWED_EXTENSIONS]
+        return file_extension in [ext.lower() for ext in settings.allowed_extensions_list]
     
     def can_access_file(self, file_id: int, user_id: int, user_role: str) -> bool:
         """Verificar si un usuario puede acceder a un archivo"""

@@ -28,7 +28,7 @@ async def upload_file(
     if not file_service.is_allowed_file_type(file.filename):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Tipo de archivo no permitido. Tipos permitidos: {', '.join(settings.ALLOWED_EXTENSIONS)}"
+            detail=f"Tipo de archivo no permitido. Tipos permitidos: {', '.join(settings.allowed_extensions_list)}"
         )
     
     # Verificar tamaño del archivo
