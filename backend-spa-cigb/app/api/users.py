@@ -117,13 +117,20 @@ async def create_user(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Crear nuevo usuario (solo para administradores)"""
-    if current_user.role != "admin":
+    """Crear nuevo usuario (solo para administradores y doctores que crean pacientes)"""
+    
+    # Admins pueden crear cualquier tipo de usuario
+    if current_user.role == "admin":
+        pass
+    # Doctores solo pueden crear pacientes
+    elif current_user.role == "doctor" and user.role == "patient":
+        pass
+    else:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="No tiene permisos para crear usuarios"
         )
-    
+
     user_service = UserService(db)
     
     # Verificar si el usuario ya existe

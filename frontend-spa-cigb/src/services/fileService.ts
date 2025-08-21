@@ -116,6 +116,27 @@ export class FileService {
     const response = await api.get('/files/patients');
     return response.data;
   }
+
+  static async getPatients(): Promise<Patient[]> {
+    const response = await api.get('/users/patients');
+    return response.data;
+  }
+
+  static async createPatient(patientData: {
+    username: string;
+    email: string;
+    first_name: string;
+    last_name: string;
+    phone?: string;
+    address?: string;
+    password: string;
+  }): Promise<Patient> {
+    const response = await api.post('/users/', {
+      ...patientData,
+      role: 'patient'
+    });
+    return response.data;
+  }
   
   static async getPatientPhotos(patientId: number): Promise<UploadedFile[]> {
     return this.getFiles(0, 1000, patientId, undefined, 'photo');

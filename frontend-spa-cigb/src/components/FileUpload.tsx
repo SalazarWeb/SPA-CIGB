@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { FileService } from '../services/fileService';
+import CreatePatientModal from './CreatePatientModal';
 import './FileUpload.css';
 
 interface Patient {
@@ -17,6 +18,7 @@ const FileUpload: React.FC = () => {
   const [uploading, setUploading] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+  const [showCreatePatientModal, setShowCreatePatientModal] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -30,6 +32,12 @@ const FileUpload: React.FC = () => {
     } catch (error) {
       console.error('Error loading patients:', error);
     }
+  };
+
+  const handlePatientCreated = (newPatient: Patient) => {
+    setPatients(prev => [...prev, newPatient]);
+    setPatientId(newPatient.id);
+    setMessage(`Paciente ${newPatient.first_name} ${newPatient.last_name} creado exitosamente`);
   };
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -150,20 +158,31 @@ const FileUpload: React.FC = () => {
       <form onSubmit={handleSubmit}>
         <div className="form-group">
           <label htmlFor="patient">Paciente *</label>
-          <select
-            id="patient"
-            value={patientId}
-            onChange={(e) => setPatientId(Number(e.target.value))}
-            disabled={uploading}
-            required
-          >
-            <option value="">Seleccionar paciente...</option>
-            {patients.map(patient => (
-              <option key={patient.id} value={patient.id}>
-                {patient.first_name} {patient.last_name} ({patient.username})
-              </option>
-            ))}
-          </select>
+          <div className="patient-selection">
+            <select
+              id="patient"
+              value={patientId}
+              onChange={(e) => setPatientId(Number(e.target.value))}
+              disabled={uploading}
+              required
+            >
+              <option value="">Seleccionar paciente...</option>
+              {patients.map(patient => (
+                <option key={patient.id} value={patient.id}>
+                  {patient.first_name} {patient.last_name} ({patient.username})
+                </option>
+              ))}
+            </select>
+            <button
+              type="button"
+              onClick={() => setShowCreatePatientModal(true)}
+              disabled={uploading}
+              className="add-patient-button"
+              title="Agregar nuevo paciente"
+            >
+              + Nuevo
+            </button>
+          </div>
         </div>
 
         <div 
@@ -260,6 +279,12 @@ const FileUpload: React.FC = () => {
           </button>
         </div>
       </form>
+
+      <CreatePatientModal
+        isOpen={showCreatePatientModal}
+        onClose={() => setShowCreatePatientModal(false)}
+        onPatientCreated={handlePatientCreated}
+      />
     </div>
   );
 };
