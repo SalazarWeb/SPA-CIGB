@@ -124,7 +124,23 @@ async def create_user(
         pass
     # Doctores solo pueden crear pacientes
     elif current_user.role == "doctor" and user.role == "patient":
-        pass
+        # Validar contraseña del doctor para mayor seguridad
+        if not user.admin_password:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Se requiere la contraseña del doctor para crear un paciente"
+            )
+        
+        from app.core.security import verify_password
+        from app.services.user_service import UserService
+        user_service_temp = UserService(db)
+        current_user_db = user_service_temp.get_user(current_user.id)
+        
+        if not current_user_db or not verify_password(user.admin_password, current_user_db.hashed_password):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Contraseña incorrecta"
+            )
     else:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -146,7 +162,27 @@ async def create_user(
             detail="El email ya está registrado"
         )
     
-    return user_service.create_user(user)
+    # Crear el usuario
+    new_user = user_service.create_user(user)
+    
+    # Si es un paciente y se proporciona diagnóstico, crear un registro médico inicial
+    if user.role == "patient" and user.diagnosis and new_user:
+        from app.services.medical_record_service import MedicalRecordService
+        from app.schemas.medical_record import MedicalRecordCreate
+        
+        medical_record_service = MedicalRecordService(db)
+        initial_record = MedicalRecordCreate(
+            patient_id=new_user.id,
+            doctor_id=current_user.id,
+            title="Diagnóstico Inicial",
+            description="Registro médico inicial creado al momento del ingreso del paciente",
+            diagnosis=user.diagnosis,
+            treatment="",
+            notes="Paciente creado por: " + current_user.first_name + " " + current_user.last_name
+        )
+        medical_record_service.create_medical_record(initial_record)
+    
+    return new_user
 
 @router.delete("/{user_id}")
 async def deactivate_user(

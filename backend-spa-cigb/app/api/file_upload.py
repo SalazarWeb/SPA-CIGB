@@ -14,24 +14,90 @@ from app.schemas.file import UploadedFile, FileUploadResponse
 
 router = APIRouter()
 
-@router.post("/upload", response_model=FileUploadResponse)
-async def upload_file(
-    file: UploadFile = File(...),
-    patient_id: int = Form(...),
+@router.post("/upload-multiple-to-patient-record", response_model=FileUploadResponse)
+async def upload_multiple_files_to_patient_record(
+    files: List[UploadFile] = File(...),
+    patient_record_id: int = Form(...),
     medical_record_id: Optional[int] = Form(None),
-    description: Optional[str] = Form(None),
+    descriptions: Optional[List[str]] = Form(None),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Subir archivo único al sistema"""
-    return await upload_multiple_files(
-        files=[file],
-        patient_id=patient_id,
-        medical_record_id=medical_record_id,
-        descriptions=[description] if description else None,
-        current_user=current_user,
-        db=db
-    )
+    """Subir múltiples archivos a un registro de paciente"""
+    file_service = FileService(db)
+    
+    # Verificar que el registro de paciente existe
+    from app.services.patient_service import PatientService
+    patient_service = PatientService(db)
+    patient_record = patient_service.get_patient(patient_record_id)
+    
+    if not patient_record:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Registro de paciente no encontrado"
+        )
+    
+    # Verificar permisos: doctores solo pueden subir archivos a sus propios pacientes
+    if current_user.role == "doctor" and patient_record.created_by_user_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="No tiene permisos para subir archivos a este paciente"
+        )
+    elif current_user.role not in ["doctor", "admin"]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="No tiene permisos para subir archivos"
+        )
+
+    # Verificar tipos y tamaños de archivos
+    for file in files:
+        if not file_service.is_allowed_file_type(file.filename):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Tipo de archivo no permitido: {file.filename}"
+            )
+        
+        if file.size > 50 * 1024 * 1024:  # 50MB
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Archivo muy grande: {file.filename}"
+            )
+
+    # Verificar el registro médico si se proporciona
+    if medical_record_id:
+        medical_record_service = MedicalRecordService(db)
+        medical_record = medical_record_service.get_medical_record(medical_record_id)
+        if not medical_record:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Registro médico no encontrado"
+            )
+
+    # Subir archivos
+    try:
+        uploaded_files = []
+        for i, file in enumerate(files):
+            description = descriptions[i] if descriptions and i < len(descriptions) else None
+            
+            uploaded_file = await file_service.save_file_to_patient_record(
+                file=file,
+                user_id=current_user.id,
+                patient_record_id=patient_record_id,
+                description=description,
+                medical_record_id=medical_record_id
+            )
+            uploaded_files.append(uploaded_file)
+
+        return FileUploadResponse(
+            message=f"Se subieron {len(uploaded_files)} archivo(s) exitosamente",
+            files=uploaded_files
+        )
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error al subir archivos: {str(e)}"
+        )
 
 @router.post("/upload-multiple", response_model=FileUploadResponse)
 async def upload_multiple_files(

@@ -60,7 +60,7 @@ export class FileService {
       formData.append('files', file);
     });
     
-    formData.append('patient_id', patientId.toString());
+    formData.append('patient_record_id', patientId.toString());
     
     if (descriptions) {
       descriptions.forEach(desc => {
@@ -78,7 +78,7 @@ export class FileService {
       });
     }
 
-    const response = await api.post('/files/upload-multiple', formData, {
+    const response = await api.post('/files/upload-multiple-to-patient-record', formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
       },
@@ -118,22 +118,18 @@ export class FileService {
   }
 
   static async getPatients(): Promise<Patient[]> {
-    const response = await api.get('/users/patients');
+    const response = await api.get('/patients/');
     return response.data;
   }
 
   static async createPatient(patientData: {
-    username: string;
-    email: string;
     first_name: string;
     last_name: string;
-    phone?: string;
-    address?: string;
-    password: string;
+    diagnosis?: string;
+    admin_password: string;
   }): Promise<Patient> {
-    const response = await api.post('/users/', {
+    const response = await api.post('/patients/', {
       ...patientData,
-      role: 'patient'
     });
     return response.data;
   }

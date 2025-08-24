@@ -14,6 +14,8 @@ class UserBase(BaseModel):
 
 class UserCreate(UserBase):
     password: str
+    diagnosis: Optional[str] = None
+    admin_password: Optional[str] = None
 
 class UserUpdate(BaseModel):
     first_name: Optional[str] = None

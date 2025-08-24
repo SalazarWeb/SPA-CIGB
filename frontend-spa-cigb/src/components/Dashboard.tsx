@@ -59,13 +59,8 @@ const Dashboard: React.FC = () => {
           <div className="dashboard-view">
             <div className="dashboard-section">
               <h2>Subir Archivos</h2>
-              <p>Suba historias clínicas y fotos al sistema. Ahora puede subir múltiples archivos y asociarlos a pacientes específicos.</p>
-              <FileUpload 
-                onUploadComplete={() => {
-                  // Opcional: cambiar a la vista de pacientes después de subir
-                  // setActiveView('patients');
-                }}
-              />
+              <p>Suba historias clínicas y fotos al sistema.</p>
+              <FileUpload />
             </div>
           </div>
         )}
@@ -74,7 +69,7 @@ const Dashboard: React.FC = () => {
           <div className="dashboard-view">
             <div className="dashboard-section">
               <h2>Mis Archivos</h2>
-              <p>Lista de archivos subidos por usted</p>
+              <p>Lista de archivos subidos por esta cuenta.</p>
               <FileList />
             </div>
           </div>

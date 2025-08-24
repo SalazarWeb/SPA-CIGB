@@ -58,11 +58,28 @@ class User(Base):
     
     uploaded_files = relationship("UploadedFile", foreign_keys="UploadedFile.user_id", back_populates="user")
 
+class Patient(Base):
+    __tablename__ = "patients"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    first_name = Column(String(100), nullable=False)
+    last_name = Column(String(100), nullable=False)
+    initial_diagnosis = Column(Text)
+    created_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    
+    # Relaciones
+    created_by = relationship("User")
+    medical_records = relationship("MedicalRecord", foreign_keys="MedicalRecord.patient_record_id", back_populates="patient_record")
+    uploaded_files = relationship("UploadedFile", foreign_keys="UploadedFile.patient_record_id", back_populates="patient_record")
+
 class MedicalRecord(Base):
     __tablename__ = "medical_records"
     
     id = Column(Integer, primary_key=True, index=True)
-    patient_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    patient_id = Column(Integer, ForeignKey("users.id"), nullable=True)  # Para usuarios pacientes (legacy)
+    patient_record_id = Column(Integer, ForeignKey("patients.id"), nullable=True)  # Para registros de pacientes
     doctor_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     title = Column(String(200), nullable=False)
     description = Column(Text)
@@ -74,6 +91,7 @@ class MedicalRecord(Base):
     
     # Relaciones
     patient = relationship("User", foreign_keys=[patient_id], back_populates="medical_records_as_patient")
+    patient_record = relationship("Patient", foreign_keys=[patient_record_id], back_populates="medical_records")
     doctor = relationship("User", foreign_keys=[doctor_id], back_populates="medical_records_as_doctor")
     files = relationship("UploadedFile", back_populates="medical_record")
     
@@ -100,11 +118,13 @@ class UploadedFile(Base):
     
     # Relaciones
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)  # Usuario que subió el archivo
-    patient_id = Column(Integer, ForeignKey("users.id"), nullable=False)  # Paciente al que pertenece
+    patient_id = Column(Integer, ForeignKey("users.id"), nullable=True)  # Paciente usuario al que pertenece (legacy)
+    patient_record_id = Column(Integer, ForeignKey("patients.id"), nullable=True)  # Registro de paciente al que pertenece
     medical_record_id = Column(Integer, ForeignKey("medical_records.id"), nullable=True)
     
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     
     user = relationship("User", foreign_keys=[user_id], back_populates="uploaded_files")
     patient = relationship("User", foreign_keys=[patient_id])
+    patient_record = relationship("Patient", foreign_keys=[patient_record_id], back_populates="uploaded_files")
     medical_record = relationship("MedicalRecord", back_populates="files")

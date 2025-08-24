@@ -4,7 +4,7 @@ from fastapi.staticfiles import StaticFiles
 import os
 
 from app.core.config import settings
-from app.api import auth, users, medical_records, file_upload
+from app.api import auth, users, medical_records, file_upload, patients
 
 app = FastAPI(
     title="SPA CIGB API",
@@ -30,6 +30,7 @@ app.mount("/uploads", StaticFiles(directory=settings.UPLOAD_DIR), name="uploads"
 # Include routers
 app.include_router(auth.router, prefix="/api/auth", tags=["authentication"])
 app.include_router(users.router, prefix="/api/users", tags=["users"])
+app.include_router(patients.router, prefix="/api/patients", tags=["patients"])
 app.include_router(medical_records.router, prefix="/api/medical-records", tags=["medical-records"])
 app.include_router(file_upload.router, prefix="/api/files", tags=["files"])
 

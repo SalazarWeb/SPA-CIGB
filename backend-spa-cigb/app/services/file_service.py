@@ -4,7 +4,7 @@ import os
 import uuid
 from fastapi import UploadFile
 from app.models.models import UploadedFile, User, photo_medical_record_association
-from app.schemas.file import UploadedFileCreate
+from app.schemas.file import UploadedFileCreate, UploadedFile as UploadedFileSchema
 from app.core.config import settings
 
 class FileService:
@@ -93,7 +93,7 @@ class FileService:
             description = descriptions[i] if descriptions and i < len(descriptions) else None
             
             # Generar nombre único para el archivo
-            file_extension = os.path.splitext(file.filename)[1]
+            file_extension = os.path.splitext(file.filename or "")[1]
             unique_filename = f"{uuid.uuid4()}{file_extension}"
             file_path = os.path.join(settings.UPLOAD_DIR, unique_filename)
             
@@ -105,7 +105,7 @@ class FileService:
                 buffer.write(content)
             
             # Clasificar tipo de archivo
-            file_type = self.classify_file_type(file.filename, file.content_type)
+            file_type = self.classify_file_type(file.filename or "", file.content_type or "")
             
             # Crear registro en base de datos
             db_file = UploadedFile(
@@ -151,6 +151,51 @@ class FileService:
         )
         
         return files[0]
+    
+    async def save_file_to_patient_record(
+        self, 
+        file: UploadFile, 
+        user_id: int, 
+        patient_record_id: int,
+        medical_record_id: Optional[int] = None,
+        description: Optional[str] = None
+    ) -> UploadedFileSchema:
+        """Guardar archivo a un registro de paciente"""
+        
+        # Generar nombre único para el archivo
+        file_extension = os.path.splitext(file.filename or "")[1]
+        unique_filename = f"{uuid.uuid4()}{file_extension}"
+        file_path = os.path.join(settings.UPLOAD_DIR, unique_filename)
+        
+        # Leer contenido del archivo
+        content = await file.read()
+        
+        # Guardar archivo físicamente
+        with open(file_path, "wb") as buffer:
+            buffer.write(content)
+        
+        # Clasificar tipo de archivo
+        file_type = self.classify_file_type(file.filename or "", file.content_type or "")
+        
+        # Crear registro en base de datos
+        db_file = UploadedFile(
+            filename=unique_filename,
+            original_filename=file.filename,
+            file_path=file_path,
+            file_size=len(content),
+            mime_type=file.content_type,
+            description=description,
+            file_type=file_type,
+            user_id=user_id,
+            patient_record_id=patient_record_id,
+            medical_record_id=medical_record_id if file_type == "medical_record" else None
+        )
+        
+        self.db.add(db_file)
+        self.db.commit()
+        self.db.refresh(db_file)
+        
+        return self.to_schema(db_file)
     
     def associate_photos_with_medical_record(self, photo_ids: List[int], medical_record_id: int) -> bool:
         """Asociar fotos existentes con un registro médico"""
@@ -228,3 +273,52 @@ class FileService:
             return medical_service.can_access_record(db_file.medical_record_id, user_id, user_role)
         
         return False
+
+    def to_schema(self, db_file: UploadedFile) -> UploadedFileSchema:
+        """Convertir un modelo de base de datos a esquema Pydantic"""
+        # Obtener datos básicos
+        data = {
+            'id': db_file.id,
+            'filename': db_file.filename,
+            'original_filename': db_file.original_filename,
+            'file_size': db_file.file_size,
+            'mime_type': db_file.mime_type,
+            'description': db_file.description,
+            'file_type': db_file.file_type,
+            'file_path': db_file.file_path,
+            'user_id': db_file.user_id,
+            'medical_record_id': db_file.medical_record_id,
+            'created_at': db_file.created_at,
+            'patient_name': None,
+            'uploader_name': None
+        }
+        
+        # Usar patient_record_id como patient_id para compatibilidad
+        patient_id = getattr(db_file, 'patient_record_id', None) or getattr(db_file, 'patient_id', None)
+        data['patient_id'] = patient_id
+        
+        # Obtener nombre del paciente
+        try:
+            if patient_id:
+                from app.services.patient_service import PatientService
+                patient_service = PatientService(self.db)
+                patient = patient_service.get_patient(patient_id)
+                if patient:
+                    data['patient_name'] = f"{patient.first_name} {patient.last_name}"
+            elif getattr(db_file, 'patient_id', None):
+                patient = self.db.query(User).filter(User.id == db_file.patient_id).first()
+                if patient:
+                    data['patient_name'] = f"{patient.first_name} {patient.last_name}"
+        except Exception:
+            pass  # Silenciar errores de obtención de nombres
+        
+        # Obtener nombre del usuario que subió el archivo
+        try:
+            if db_file.user_id:
+                uploader = self.db.query(User).filter(User.id == db_file.user_id).first()
+                if uploader:
+                    data['uploader_name'] = f"{uploader.first_name} {uploader.last_name}"
+        except Exception:
+            pass  # Silenciar errores de obtención de nombres
+        
+        return UploadedFileSchema(**data)

@@ -63,6 +63,30 @@
   opacity: 0.5;
 }
 
+.info-section {
+  padding: 16px 20px;
+  background-color: #f0f9ff;
+  border-bottom: 1px solid #e5e7eb;
+  border-left: 4px solid #3b82f6;
+}
+
+.info-section p {
+  margin: 0 0 8px 0;
+  font-size: 0.9rem;
+  color: #1f2937;
+}
+
+.info-section ul {
+  margin: 8px 0 0 20px;
+  padding: 0;
+}
+
+.info-section li {
+  font-size: 0.85rem;
+  color: #4b5563;
+  margin-bottom: 4px;
+}
+
 .patient-form {
   padding: 20px;
 }
@@ -113,6 +137,25 @@
 .form-group textarea {
   resize: vertical;
   min-height: 80px;
+}
+
+.security-section {
+  border-top: 1px solid #e5e7eb;
+  padding-top: 20px;
+  margin-top: 20px;
+}
+
+.security-section label {
+  color: #dc2626;
+  font-weight: 600;
+}
+
+.form-help {
+  display: block;
+  margin-top: 4px;
+  font-size: 0.8rem;
+  color: #6b7280;
+  font-style: italic;
 }
 
 .error-message {

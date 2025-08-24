@@ -32,7 +32,7 @@ const Login: React.FC = () => {
       <div className="login-form">
         <div className="login-header">
           <h2>Iniciar Sesión</h2>
-          <p>Sistema de Gestión de Historias Clínicas - CIGB</p>
+          <p>Sistema de Gestión - CIGB</p>
         </div>
         
         <form onSubmit={handleSubmit}>
